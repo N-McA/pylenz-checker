@@ -319,6 +319,7 @@ name = "pylenz-checker"
 version = "0.1.0"
 dependencies = [
  "notify",
+ "rand",
  "rayon",
  "ruff_python_ast",
  "ruff_python_parser",

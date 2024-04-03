@@ -7,7 +7,9 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use std::time::Instant;
+use rand::Rng;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -34,19 +36,24 @@ fn main() {
         .watch(path.as_ref(), RecursiveMode::Recursive)
         .unwrap();
 
-    // Every second, print a random AST:
+    // Every few seconds, print a random AST:
     let asts_clone = Arc::clone(&asts);
-
     std::thread::spawn(move || loop {
-        std::thread::sleep(std::time::Duration::from_secs(1));
+        std::thread::sleep(Duration::from_secs(3));
         let asts_guard = asts_clone.lock().unwrap();
-        let random_path = asts_guard.keys().nth(0);
-        if let Some(path) = random_path {
-            let ast = asts_guard.get(path).unwrap();
-            println!("Random AST: {:?}", ast);
-            println!("Initial load took {}s", original_load_time);
-            println!("Parsed {} Python files", asts_len);
-            println!("Visited {} lines of code", line_count);
+
+        if !asts_guard.is_empty() {
+            let mut rng = rand::thread_rng();
+            let random_index = rng.gen_range(0..asts_guard.len());
+            let random_path = asts_guard.keys().nth(random_index);
+
+            if let Some(path) = random_path {
+                let ast = asts_guard.get(path).unwrap();
+                println!("Random AST: {:?}", ast);
+                println!("Initial load took {}s", original_load_time);
+                println!("Parsed {} Python files", asts_len);
+                println!("Visited {} lines of code", line_count);
+            }
         }
     });
 

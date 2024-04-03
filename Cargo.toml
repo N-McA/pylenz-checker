@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 rayon = "1.5.1"
 notify = "*"
+rand = "*"
 
 [dependencies.ruff_python_parser]
 git = "https://github.com/astral-sh/ruff"
