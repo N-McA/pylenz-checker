@@ -1,4 +1,5 @@
-use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher, Event};
+use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
+use rayon::prelude::*;
 use ruff_python_ast::Mod;
 use ruff_python_parser;
 use std::collections::HashMap;
@@ -6,8 +7,7 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::time::{Instant};
-use rayon::prelude::*;
+use std::time::Instant;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -30,23 +30,23 @@ fn main() {
 
     let (tx, rx) = std::sync::mpsc::channel();
     let mut watcher = RecommendedWatcher::new(tx, Config::default()).unwrap();
-    watcher.watch(path.as_ref(), RecursiveMode::Recursive).unwrap();
+    watcher
+        .watch(path.as_ref(), RecursiveMode::Recursive)
+        .unwrap();
 
     // Every second, print a random AST:
     let asts_clone = Arc::clone(&asts);
 
-    std::thread::spawn(move || {
-        loop {
-            std::thread::sleep(std::time::Duration::from_secs(1));
-            let asts_guard = asts_clone.lock().unwrap();
-            let random_path = asts_guard.keys().nth(0);
-            if let Some(path) = random_path {
-                let ast = asts_guard.get(path).unwrap();
-                println!("Random AST: {:?}", ast);
-                println!("Initial load took {}s", original_load_time);
-                println!("Parsed {} Python files", asts_len);
-                println!("Visited {} lines of code", line_count);
-            }
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        let asts_guard = asts_clone.lock().unwrap();
+        let random_path = asts_guard.keys().nth(0);
+        if let Some(path) = random_path {
+            let ast = asts_guard.get(path).unwrap();
+            println!("Random AST: {:?}", ast);
+            println!("Initial load took {}s", original_load_time);
+            println!("Parsed {} Python files", asts_len);
+            println!("Visited {} lines of code", line_count);
         }
     });
 
@@ -54,19 +54,23 @@ fn main() {
     for result in rx {
         match result {
             Ok(event) => {
-                if let Event { kind: notify::event::EventKind::Modify(_), paths, .. } = event {
+                if let Event {
+                    kind: notify::event::EventKind::Modify(_),
+                    paths,
+                    ..
+                } = event
+                {
                     for path in paths {
                         if path.extension().and_then(std::ffi::OsStr::to_str) == Some("py") {
                             update_ast_for_file(&path, &asts);
                         }
                     }
                 }
-            },
+            }
             Err(e) => println!("watch error: {:?}", e),
         }
     }
 }
-
 
 fn collect_paths_parallel(dir: &str) -> Vec<PathBuf> {
     fs::read_dir(dir)
@@ -89,18 +93,21 @@ fn collect_paths_parallel(dir: &str) -> Vec<PathBuf> {
 }
 
 fn parse_files_parallel(paths: &[PathBuf], asts: &Arc<Mutex<HashMap<PathBuf, Mod>>>) -> usize {
-    paths.par_iter().filter_map(|path| {
-        let content = fs::read_to_string(path).ok()?;
-        let lines = content.lines().count();
-        match ruff_python_parser::parse(&content, ruff_python_parser::Mode::Module) {
-            Ok(ast) => {
-                let mut asts_guard = asts.lock().unwrap();
-                asts_guard.insert(path.clone(), ast);
-            },
-            Err(_e) => (), // Handle or ignore errors as needed
-        }
-        Some(lines)
-    }).sum()
+    paths
+        .par_iter()
+        .filter_map(|path| {
+            let content = fs::read_to_string(path).ok()?;
+            let lines = content.lines().count();
+            match ruff_python_parser::parse(&content, ruff_python_parser::Mode::Module) {
+                Ok(ast) => {
+                    let mut asts_guard = asts.lock().unwrap();
+                    asts_guard.insert(path.clone(), ast);
+                }
+                Err(_e) => (), // Handle or ignore errors as needed
+            }
+            Some(lines)
+        })
+        .sum()
 }
 
 fn update_ast_for_file(path: &PathBuf, asts: &Arc<Mutex<HashMap<PathBuf, Mod>>>) {
@@ -118,9 +125,9 @@ fn update_ast_for_file(path: &PathBuf, asts: &Arc<Mutex<HashMap<PathBuf, Mod>>>)
             let mut asts_guard = asts.lock().unwrap();
             asts_guard.insert(path.clone(), ast);
             println!("Updated AST for {:?}", path);
-        },
+        }
         Err(e) => {
             println!("Failed to parse file: {:?}, error: {:?}", path, e);
-        },
+        }
     }
 }
