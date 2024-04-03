@@ -1,0 +1,17 @@
+[package]
+name = "pylenz-checker"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rayon = "1.5.1"
+notify = "*"
+
+[dependencies.ruff_python_parser]
+git = "https://github.com/astral-sh/ruff"
+package = "ruff_python_parser"
+
+[dependencies.ruff_python_ast]
+git = "https://github.com/astral-sh/ruff"
+package = "ruff_python_ast"
+
