@@ -26,13 +26,29 @@ fn main() {
 
     let duration = start.elapsed();
     let asts_len = asts.lock().unwrap().len();
-    println!("Initial load took {}s", duration.as_secs_f32());
-    println!("Parsed {} Python files", asts_len);
-    println!("Visited {} lines of code", line_count);
+    let original_load_time = duration.as_secs_f32();
 
     let (tx, rx) = std::sync::mpsc::channel();
     let mut watcher = RecommendedWatcher::new(tx, Config::default()).unwrap();
     watcher.watch(path.as_ref(), RecursiveMode::Recursive).unwrap();
+
+    // Every second, print a random AST:
+    let asts_clone = Arc::clone(&asts);
+
+    std::thread::spawn(move || {
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(1));
+            let asts_guard = asts_clone.lock().unwrap();
+            let random_path = asts_guard.keys().nth(0);
+            if let Some(path) = random_path {
+                let ast = asts_guard.get(path).unwrap();
+                println!("Random AST: {:?}", ast);
+                println!("Initial load took {}s", original_load_time);
+                println!("Parsed {} Python files", asts_len);
+                println!("Visited {} lines of code", line_count);
+            }
+        }
+    });
 
     println!("Watching for file changes...");
     for result in rx {
